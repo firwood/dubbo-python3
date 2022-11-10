@@ -36,6 +36,75 @@ from dubbo.common.exceptions import HessianTypeError
 from dubbo.common.util import double_to_long_bits, get_invoke_id
 
 
+class Integer(object):
+    """
+    java.lang.Integer 处理
+    """
+    def __init__(self, path, values=None):
+        self.__path = path
+        self.__values=values
+        pass
+
+    def get_value(self):
+        return self.__values
+    def __getitem__(self, key):
+        return self.__values[key]
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, (str)):
+            raise ValueError('Object key {} should be string type.'.format(key))
+        self.__values[key] = value
+
+    def __delitem__(self, key):
+        del self.__values[key]
+
+    def __repr__(self):
+        return '<java object {} at {} with {}>'.format(self.__path, hex(id(self)), self.__values)
+
+    def __contains__(self, key):
+        return key in self.__values
+
+    def keys(self):
+        return self.__values.keys()
+
+    def get_path(self):
+        return self.__path
+
+class List_Integer(object):
+    """
+    处理 List<Integer> 序列化问题
+    """
+    def __init__(self, path, values=None):
+        self.__path = path
+        self.__values = values
+        pass
+    pass
+    def get_value(self):
+        return self.__values
+
+    def __getitem__(self, key):
+        return self.__values[key]
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, (str)):
+            raise ValueError('Object key {} should be string type.'.format(key))
+        self.__values[key] = value
+
+    def __delitem__(self, key):
+        del self.__values[key]
+
+    def __repr__(self):
+        return '<java object {} at {} with {}>'.format(self.__path, hex(id(self)), self.__values)
+
+    def __contains__(self, key):
+        return key in self.__values
+
+    def keys(self):
+        return self.__values.keys()
+
+    def get_path(self):
+        return self.__path
+
 class Object(object):
     """
     创建一个Java对象
@@ -49,7 +118,7 @@ class Object(object):
         if not isinstance(path, (str)):
             raise ValueError('Object path {} should be string type.'.format(path))
         self.__path = path
-        if not isinstance(values, dict):
+        if not isinstance(values, dict) :
             values = {}
         self.__values = values
 
@@ -136,6 +205,14 @@ class Request(object):
         elif isinstance(_class, str):
             return 'L' + 'java/lang/String' + ';'
         elif isinstance(_class, Object):
+            path = _class.get_path()
+            path = 'L' + path.replace('.', '/') + ';'
+            return path
+        elif isinstance(_class, Integer):
+            path = _class.get_path()
+            path = 'L' + path.replace('.', '/') + ';'
+            return path
+        elif isinstance(_class, List_Integer):
             path = _class.get_path()
             path = 'L' + path.replace('.', '/') + ';'
             return path
@@ -399,6 +476,50 @@ class Request(object):
             result.extend(self._encode_single_value(v))
         return result
 
+    def _encode_Integer(self, value):
+        """
+        处理java的Integer问题
+        """
+        return self._encode_int(value.get_value())
+
+    def _encode_List_Integer(self, value):
+        """
+        处理java的Integer问题
+        """
+        """
+                对一个列表进行编码
+                :param value:
+                :return:
+                """
+        value=value.get_value()
+        result = []
+        length = len(value)
+        if length == 0:
+            # 没有值则无法判断类型，一律返回null
+            return self._encode_single_value(None)
+        if isinstance(value[0], bool):
+            _type = '[boolean'
+        elif isinstance(value[0], int):
+            _type = '[int'
+        elif isinstance(value[0], float):
+            _type = '[double'
+        elif isinstance(value[0], str):
+            _type = '[string'
+        elif isinstance(value[0], Object):
+            _type = '[object'
+        else:
+            raise HessianTypeError('Unknown list type: {}'.format(value[0]))
+        if length < 0x08:
+            result.append(0x78 + length)
+        else:
+            result.append(0x58)
+        for v in value:
+            if type(value[0]) != type(v):
+                raise HessianTypeError('All elements in list must be the same type, first type'
+                                       ' is {0} but current type is {1}'.format(type(value[0]), type(v)))
+            result.extend(self._encode_single_value(v))
+        return result
+
     def _encode_single_value(self, value):
         """
         根据hessian协议对单个变量进行编码
@@ -423,6 +544,11 @@ class Request(object):
         # 列表(list)类型，不可以使用tuple替代
         elif isinstance(value, list):
             return self._encode_list(value)
+        # java的Integer
+        elif isinstance(value, Integer):
+            return self._encode_Integer(value)
+        elif isinstance(value, List_Integer):
+            return self._encode_List_Integer(value)
         # null
         elif value is None:
             return [ord('N')]
