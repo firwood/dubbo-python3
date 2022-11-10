@@ -21,7 +21,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='python-dubbo3',
+    name='dubbo-python3',
     version='0.0.2',
     url='',
     author='',
